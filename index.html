@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cerca Lavoro Italia</title>
+<style>
+:root{--bg:#F7F5F0;--ink:#1B1F1D;--mut:#4F5752;--card:#fff;--line:#D9D4C7;--acc:#1F6F54;--on:#fff}
+@media(prefers-color-scheme:dark){:root{--bg:#141815;--ink:#EEF0EC;--mut:#A3ABA6;--card:#1C221E;--line:#2E3631;--acc:#5FC39C;--on:#0D1A14}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:920px;margin:0 auto;padding:40px 16px}
+h1{margin:0 0 4px;font-size:36px;letter-spacing:-.02em}
+.sub{color:var(--mut);margin:0 0 28px}
+form{display:grid;grid-template-columns:2fr 1fr auto;gap:12px;align-items:end}
+label{display:grid;gap:6px;font-weight:600;font-size:14px}
+input,select,button{font:inherit;min-height:48px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+button{background:var(--acc);color:var(--on);border:0;font-weight:600;cursor:pointer;padding:0 28px}
+@media(max-width:640px){form{grid-template-columns:1fr}}
+details{margin:16px 0;color:var(--mut);font-size:14px}
+details label{margin:8px 0}
+.meta{color:var(--mut);font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 20px;margin-top:12px}
+.card h2{font-size:19px;margin:0 0 4px}
+.card a{color:var(--acc)}
+.card p{margin:6px 0 0;font-size:15px}
+#more{margin-top:16px}
+footer{margin-top:32px;font-size:13px;color:var(--mut)}
+footer a{color:var(--acc)}
+</style></head>
+<body><main>
+<h1>Cerca Lavoro Italia</h1>
+<p class="sub">Offerte di lavoro per parola chiave e regione. Gratis.</p>
+<form id="f">
+<label>Parole chiave<input id="q" placeholder="es. magazziniere, sviluppatore" required></label>
+<label>Regione<select id="r"></select></label>
+<button>Cerca</button>
+</form>
+<details id="k"><summary>Chiave gratuita Adzuna (da inserire una sola volta)</summary>
+<p>Registrati gratis su <a href="https://developer.adzuna.com/" target="_blank" rel="noopener">developer.adzuna.com</a> e incolla qui App ID e App Key. Restano salvati solo nel tuo browser.</p>
+<label>App ID<input id="id" autocomplete="off"></label>
+<label>App Key<input id="key" autocomplete="off"></label>
+<button type="button" id="sv">Salva</button>
+</details>
+<p id="st" class="meta" role="status"></p>
+<div id="out"></div>
+<button id="more" type="button" hidden>Carica altre offerte</button>
+<footer>Offerte fornite da <a href="https://www.adzuna.it" target="_blank" rel="noopener">Adzuna</a>.</footer>
+</main>
+<script>
+const R=["Tutta Italia","Abruzzo","Basilicata","Calabria","Campania","Emilia-Romagna","Friuli-Venezia Giulia","Lazio","Liguria","Lombardia","Marche","Molise","Piemonte","Puglia","Sardegna","Sicilia","Toscana","Trentino-Alto Adige","Umbria","Valle d'Aosta","Veneto"];
+const $=s=>document.getElementById(s);
+const S=(k,v)=>{try{return v===undefined?(localStorage.getItem(k)||""):localStorage.setItem(k,v)}catch(e){return ""}};
+R.forEach(n=>{const o=document.createElement("option");o.textContent=n;$("r").append(o)});
+$("id").value=S("aid");$("key").value=S("akey");
+if(!$("id").value||!$("key").value)$("k").open=true;
+$("sv").onclick=()=>{S("aid",$("id").value.trim());S("akey",$("key").value.trim());$("st").textContent="Chiave salvata."};
+let page=1,cur=null;
+const txt=h=>new DOMParser().parseFromString(h||"","text/html").body.textContent;
+function add(j){
+  const c=document.createElement("div");c.className="card";
+  const h=document.createElement("h2"),a=document.createElement("a");
+  a.href=j.redirect_url;a.target="_blank";a.rel="noopener";a.textContent=txt(j.title);h.append(a);
+  const m=document.createElement("div");m.className="meta";
+  m.textContent=[j.company&&j.company.display_name,j.location&&j.location.display_name,j.created&&new Date(j.created).toLocaleDateString("it-IT")].filter(Boolean).join(" · ");
+  const p=document.createElement("p");p.textContent=txt(j.description);
+  c.append(h,m,p);$("out").append(c);
+}
+async function load(){
+  const id=S("aid"),key=S("akey");
+  if(!id||!key){$("k").open=true;$("st").textContent="Inserisci prima la chiave gratuita Adzuna.";return}
+  const p=new URLSearchParams({app_id:id,app_key:key,results_per_page:20,what:cur.q,sort_by:"date","content-type":"application/json"});
+  if(cur.r!=="Tutta Italia")p.set("where",cur.r);
+  $("st").textContent="Ricerca in corso…";
+  try{
+    const res=await fetch("https://api.adzuna.com/v1/api/jobs/it/search/"+page+"?"+p);
+    if(!res.ok)throw new Error("errore "+res.status);
+    const d=await res.json();
+    d.results.forEach(add);
+    const n=$("out").children.length;
+    $("st").textContent=n?d.count+" offerte trovate, ne vedi "+n+".":"Nessuna offerta trovata. Prova con altre parole chiave.";
+    $("more").hidden=d.results.length<20;
+  }catch(e){
+    $("st").textContent="Impossibile contattare Adzuna ("+e.message+"). Controlla la chiave e la connessione.";
+  }
+}
+$("f").onsubmit=e=>{e.preventDefault();cur={q:$("q").value.trim(),r:$("r").value};page=1;$("out").textContent="";$("more").hidden=true;load()};
+$("more").onclick=()=>{page++;load()};
+</script></body></html>
